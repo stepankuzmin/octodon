@@ -1,0 +1,21 @@
+{
+  "name": "octodon",
+  "version": "1.0.0",
+  "description": "Static Mastodon API server powered by markdown files",
+  "type": "module",
+  "scripts": {
+    "build": "tsx src/build.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241231.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.95.0"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "marked": "^15.0.6"
+  }
+}
