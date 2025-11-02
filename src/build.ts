@@ -64,6 +64,10 @@ interface PostData {
 // Load account info
 const account: Account = JSON.parse(readFileSync('account.json', 'utf-8'));
 
+// Extract base URL from account.url (e.g., "https://octodon.stepan-kuzmin.workers.dev/@stepan")
+// Remove the username part to get the base domain
+const baseUrl = account.url.replace(`/@${account.username}`, '');
+
 // Read all markdown files
 const postsDir = 'posts';
 const files = readdirSync(postsDir).filter(f => f.endsWith('.md'));
@@ -99,8 +103,8 @@ for (const filename of files) {
     spoiler_text: postData.spoiler_text || '',
     visibility: postData.visibility || 'public',
     language: postData.language || 'en',
-    uri: `https://octodon.stepankuzmin.workers.dev/@stepan/${id}`,
-    url: `https://octodon.stepankuzmin.workers.dev/@stepan/${id}`,
+    uri: `${baseUrl}/@${account.username}/${id}`,
+    url: `${baseUrl}/@${account.username}/${id}`,
     replies_count: 0,
     reblogs_count: 0,
     favourites_count: 0,

@@ -4,9 +4,7 @@
       "WebFetch(domain:docs.joinmastodon.org)",
       "WebFetch(domain:developers.cloudflare.com)",
       "Bash(npm install)",
-      "Bash(bd onboard:*)",
-      "Bash(bd create:*)",
-      "Bash(bd update:*)",
+      "Bash(bd:*)",
       "Bash(npx wrangler:*)"
     ],
     "deny": [],
