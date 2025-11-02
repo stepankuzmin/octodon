@@ -14,7 +14,7 @@ export default {
     // Add CORS headers for Mastodon clients
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Content-Type': 'application/json',
     };
@@ -22,6 +22,40 @@ export default {
     // Handle OPTIONS for CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
+    }
+
+    // Route: POST /api/v1/apps (OAuth app registration for clients)
+    // Returns mock credentials - no storage needed for read-only API
+    if (request.method === 'POST' && url.pathname === '/api/v1/apps') {
+      try {
+        const body = await request.json() as any;
+        const clientName = body.client_name || 'Unknown App';
+
+        // Generate deterministic client_id from client_name
+        const encoder = new TextEncoder();
+        const data = encoder.encode(clientName);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const clientId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+        const clientSecret = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(32, 64);
+
+        const app = {
+          id: clientId.slice(0, 16),
+          name: clientName,
+          website: body.website || null,
+          redirect_uri: body.redirect_uris || 'urn:ietf:wg:oauth:2.0:oob',
+          client_id: clientId,
+          client_secret: clientSecret,
+          vapid_key: '',
+        };
+
+        return new Response(JSON.stringify(app), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: 'Invalid request' }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
     }
 
     // Fetch data from R2
