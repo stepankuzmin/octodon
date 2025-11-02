@@ -1,0 +1,25 @@
+{
+  "instance": {
+    "domain": "your-worker.workers.dev",
+    "title": "My Octodon Instance",
+    "version": "0.1.0",
+    "description": "A tiny Mastodon-compatible API powered by markdown files and Cloudflare Workers",
+    "sourceUrl": "https://github.com/yourusername/octodon",
+    "languages": ["en"],
+    "thumbnail": "https://example.com/thumbnail.jpg",
+    "email": "contact@example.com"
+  },
+  "account": {
+    "id": "1",
+    "username": "yourusername",
+    "acct": "yourusername",
+    "display_name": "Your Name",
+    "note": "<p>Welcome to my personal Mastodon instance! This is powered by markdown files.</p>",
+    "url": "https://your-worker.workers.dev/@yourusername",
+    "avatar": "https://example.com/avatar.jpg",
+    "header": "https://example.com/header.jpg",
+    "locked": false,
+    "bot": false,
+    "created_at": "2025-01-01T00:00:00.000Z"
+  }
+}

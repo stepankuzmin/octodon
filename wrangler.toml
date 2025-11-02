@@ -1,0 +1,17 @@
+name = "octodon"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# Workers KV namespace for storing status data
+[[kv_namespaces]]
+binding = "STATUSES_KV"
+id = "YOUR_KV_NAMESPACE_ID"
+preview_id = "YOUR_PREVIEW_KV_NAMESPACE_ID"
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# Environment variables (optional)
+[vars]
+ACCOUNT_ID = "1"

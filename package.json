@@ -1,0 +1,21 @@
+{
+  "name": "octodon",
+  "version": "0.1.0",
+  "description": "A tiny Mastodon API implementation using Markdown files and Cloudflare Workers",
+  "type": "module",
+  "scripts": {
+    "build": "tsx scripts/build.ts",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241127.0",
+    "@types/node": "^22.10.1",
+    "gray-matter": "^4.0.3",
+    "marked": "^11.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "wrangler": "^3.93.0"
+  }
+}
