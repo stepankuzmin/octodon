@@ -58,6 +58,75 @@ export default {
       }
     }
 
+    // Route: GET /oauth/authorize (OAuth authorization endpoint)
+    // Auto-approve and redirect back with authorization code
+    if (request.method === 'GET' && url.pathname === '/oauth/authorize') {
+      const clientId = url.searchParams.get('client_id');
+      const redirectUri = url.searchParams.get('redirect_uri');
+      const responseType = url.searchParams.get('response_type');
+
+      if (!clientId || !redirectUri || responseType !== 'code') {
+        return new Response('Invalid OAuth request', { status: 400 });
+      }
+
+      try {
+        // Generate deterministic authorization code from client_id
+        const encoder = new TextEncoder();
+        const data = encoder.encode(clientId + ':auth_code');
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const authCode = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+
+        // Redirect back to client with authorization code
+        // Handle complex redirect URIs by manually appending the code parameter
+        const separator = redirectUri.includes('?') ? '&' : '?';
+        const redirectUrlWithCode = `${redirectUri}${separator}code=${authCode}`;
+
+        return Response.redirect(redirectUrlWithCode, 302);
+      } catch (error) {
+        return new Response('Failed to process OAuth request', { status: 500 });
+      }
+    }
+
+    // Route: POST /oauth/token (OAuth token exchange endpoint)
+    // Exchange authorization code for access token
+    if (request.method === 'POST' && url.pathname === '/oauth/token') {
+      try {
+        const body = await request.json() as any;
+        const grantType = body.grant_type;
+        const code = body.code;
+        const clientId = body.client_id;
+
+        if (grantType !== 'authorization_code' || !code || !clientId) {
+          return new Response(JSON.stringify({ error: 'invalid_request' }), {
+            status: 400,
+            headers: corsHeaders,
+          });
+        }
+
+        // Generate deterministic access token from client_id
+        const encoder = new TextEncoder();
+        const data = encoder.encode(clientId + ':access_token');
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const accessToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const tokenResponse = {
+          access_token: accessToken,
+          token_type: 'Bearer',
+          scope: 'read write follow push',
+          created_at: Math.floor(Date.now() / 1000),
+        };
+
+        return new Response(JSON.stringify(tokenResponse), { headers: corsHeaders });
+      } catch (error) {
+        return new Response(JSON.stringify({ error: 'invalid_request' }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
+    }
+
     // Fetch data from R2
     let data: PostsData;
     try {
