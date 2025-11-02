@@ -16,21 +16,28 @@ async function hashToHex(input: string): Promise<string> {
   return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json',
+} as const;
+
+const DEFAULT_PREFERENCES = {
+  'posting:default:visibility': 'public',
+  'posting:default:sensitive': false,
+  'posting:default:language': 'en',
+  'reading:expand:media': 'default',
+  'reading:expand:spoilers': false,
+} as const;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Add CORS headers for Mastodon clients
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Content-Type': 'application/json',
-    };
-
     // Handle OPTIONS for CORS preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders });
+      return new Response(null, { headers: CORS_HEADERS });
     }
 
     // Route: POST /api/v1/apps (OAuth app registration for clients)
@@ -54,11 +61,11 @@ export default {
           vapid_key: '',
         };
 
-        return new Response(JSON.stringify(app), { headers: corsHeaders });
+        return new Response(JSON.stringify(app), { headers: CORS_HEADERS });
       } catch (error) {
         return new Response(JSON.stringify({ error: 'Invalid request' }), {
           status: 400,
-          headers: corsHeaders,
+          headers: CORS_HEADERS,
         });
       }
     }
@@ -100,7 +107,7 @@ export default {
         if (grantType !== 'authorization_code' || !code || !clientId) {
           return new Response(JSON.stringify({ error: 'invalid_request' }), {
             status: 400,
-            headers: corsHeaders,
+            headers: CORS_HEADERS,
           });
         }
 
@@ -113,11 +120,11 @@ export default {
           created_at: Math.floor(Date.now() / 1000),
         };
 
-        return new Response(JSON.stringify(tokenResponse), { headers: corsHeaders });
+        return new Response(JSON.stringify(tokenResponse), { headers: CORS_HEADERS });
       } catch (error) {
         return new Response(JSON.stringify({ error: 'invalid_request' }), {
           status: 400,
-          headers: corsHeaders,
+          headers: CORS_HEADERS,
         });
       }
     }
@@ -129,14 +136,14 @@ export default {
       if (!object) {
         return new Response(JSON.stringify({ error: 'Data not found' }), {
           status: 500,
-          headers: corsHeaders,
+          headers: CORS_HEADERS,
         });
       }
       data = await object.json() as PostsData;
     } catch (error) {
       return new Response(JSON.stringify({ error: 'Failed to load data' }), {
         status: 500,
-        headers: corsHeaders,
+        headers: CORS_HEADERS,
       });
     }
 
@@ -148,7 +155,7 @@ export default {
         40
       );
       const statuses = data.statuses.slice(0, limit);
-      return new Response(JSON.stringify(statuses), { headers: corsHeaders });
+      return new Response(JSON.stringify(statuses), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/statuses/:id
@@ -158,10 +165,10 @@ export default {
       if (!status) {
         return new Response(JSON.stringify({ error: 'Record not found' }), {
           status: 404,
-          headers: corsHeaders,
+          headers: CORS_HEADERS,
         });
       }
-      return new Response(JSON.stringify(status), { headers: corsHeaders });
+      return new Response(JSON.stringify(status), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/instance
@@ -188,39 +195,31 @@ export default {
         thumbnail: '',
         contact_account: data.account,
       };
-      return new Response(JSON.stringify(instance), { headers: corsHeaders });
+      return new Response(JSON.stringify(instance), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/accounts/verify_credentials
     // Returns the authenticated user's account (always returns the single account)
     // MUST come before /api/v1/accounts/:id to avoid matching "verify_credentials" as an ID
     if (url.pathname === '/api/v1/accounts/verify_credentials') {
-      return new Response(JSON.stringify(data.account), { headers: corsHeaders });
+      return new Response(JSON.stringify(data.account), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/accounts/:id
     if (url.pathname.startsWith('/api/v1/accounts/')) {
       const id = url.pathname.split('/').pop();
       if (id === '1' || id === data.account.id) {
-        return new Response(JSON.stringify(data.account), { headers: corsHeaders });
+        return new Response(JSON.stringify(data.account), { headers: CORS_HEADERS });
       }
       return new Response(JSON.stringify({ error: 'Record not found' }), {
         status: 404,
-        headers: corsHeaders,
+        headers: CORS_HEADERS,
       });
     }
 
     // Route: GET /api/v1/preferences
-    // Returns user preferences (minimal defaults for read-only)
     if (url.pathname === '/api/v1/preferences') {
-      const preferences = {
-        'posting:default:visibility': 'public',
-        'posting:default:sensitive': false,
-        'posting:default:language': 'en',
-        'reading:expand:media': 'default',
-        'reading:expand:spoilers': false,
-      };
-      return new Response(JSON.stringify(preferences), { headers: corsHeaders });
+      return new Response(JSON.stringify(DEFAULT_PREFERENCES), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/timelines/home
@@ -231,13 +230,13 @@ export default {
         40
       );
       const statuses = data.statuses.slice(0, limit);
-      return new Response(JSON.stringify(statuses), { headers: corsHeaders });
+      return new Response(JSON.stringify(statuses), { headers: CORS_HEADERS });
     }
 
     // 404 for everything else
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
-      headers: corsHeaders,
+      headers: CORS_HEADERS,
     });
   },
 };
