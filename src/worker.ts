@@ -15,7 +15,7 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Content-Type': 'application/json',
     };
 
@@ -196,6 +196,13 @@ export default {
       return new Response(JSON.stringify(instance), { headers: corsHeaders });
     }
 
+    // Route: GET /api/v1/accounts/verify_credentials
+    // Returns the authenticated user's account (always returns the single account)
+    // MUST come before /api/v1/accounts/:id to avoid matching "verify_credentials" as an ID
+    if (url.pathname === '/api/v1/accounts/verify_credentials') {
+      return new Response(JSON.stringify(data.account), { headers: corsHeaders });
+    }
+
     // Route: GET /api/v1/accounts/:id
     if (url.pathname.startsWith('/api/v1/accounts/')) {
       const id = url.pathname.split('/').pop();
@@ -206,6 +213,30 @@ export default {
         status: 404,
         headers: corsHeaders,
       });
+    }
+
+    // Route: GET /api/v1/preferences
+    // Returns user preferences (minimal defaults for read-only)
+    if (url.pathname === '/api/v1/preferences') {
+      const preferences = {
+        'posting:default:visibility': 'public',
+        'posting:default:sensitive': false,
+        'posting:default:language': 'en',
+        'reading:expand:media': 'default',
+        'reading:expand:spoilers': false,
+      };
+      return new Response(JSON.stringify(preferences), { headers: corsHeaders });
+    }
+
+    // Route: GET /api/v1/timelines/home
+    // For static instance, home timeline = public timeline (no following)
+    if (url.pathname === '/api/v1/timelines/home') {
+      const limit = Math.min(
+        parseInt(url.searchParams.get('limit') || '20'),
+        40
+      );
+      const statuses = data.statuses.slice(0, limit);
+      return new Response(JSON.stringify(statuses), { headers: corsHeaders });
     }
 
     // 404 for everything else
