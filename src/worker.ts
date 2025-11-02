@@ -1,10 +1,12 @@
+import type { Account, Status } from './types';
+
 interface Env {
   DATA: R2Bucket;
 }
 
 interface PostsData {
-  account: unknown;
-  statuses: unknown[];
+  account: Account;
+  statuses: Status[];
 }
 
 export default {
