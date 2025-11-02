@@ -70,7 +70,7 @@ This creates `dist/posts.json`.
 ## Step 6: Upload to R2
 
 ```bash
-npx wrangler r2 object put octodon-data/posts.json --file=dist/posts.json
+npx wrangler r2 object put octodon-data/posts.json --file=dist/posts.json --remote
 ```
 
 ## Step 7: Deploy Worker
@@ -144,7 +144,7 @@ GitHub Actions will automatically build and deploy on every push to `main`.
 
 1. Edit markdown files in `posts/`
 2. Run `npm run build`
-3. Upload to R2: `npx wrangler r2 object put octodon-data/posts.json --file=dist/posts.json`
+3. Upload to R2: `npx wrangler r2 object put octodon-data/posts.json --file=dist/posts.json --remote`
 4. Done! (Worker automatically fetches new data)
 
 ### With GitHub Actions
@@ -160,7 +160,7 @@ GitHub Actions will automatically build and deploy on every push to `main`.
 Check if `posts.json` exists in R2:
 
 ```bash
-npx wrangler r2 object get octodon-data/posts.json --file=test.json
+npx wrangler r2 object get octodon-data/posts.json --file=test.json --remote
 cat test.json
 ```
 

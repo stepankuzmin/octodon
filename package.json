@@ -12,10 +12,10 @@
     "@cloudflare/workers-types": "^4.20241231.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
-    "wrangler": "^3.95.0"
+    "wrangler": "^4.45.3"
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "marked": "^15.0.6"
+    "marked": "^16.4.1"
   }
 }
