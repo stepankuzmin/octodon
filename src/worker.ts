@@ -9,6 +9,13 @@ interface PostsData {
   statuses: Status[];
 }
 
+async function hashToHex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  const bytes = Array.from(new Uint8Array(hash));
+  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -33,13 +40,9 @@ export default {
         const body = await request.json() as any;
         const clientName = body.client_name || 'Unknown App';
 
-        // Generate deterministic client_id from client_name
-        const encoder = new TextEncoder();
-        const data = encoder.encode(clientName);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const clientId = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
-        const clientSecret = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(32, 64);
+        const hash = await hashToHex(clientName);
+        const clientId = hash.slice(0, 32);
+        const clientSecret = hash.slice(32, 64);
 
         const app = {
           id: clientId.slice(0, 16),
@@ -72,12 +75,7 @@ export default {
       }
 
       try {
-        // Generate deterministic authorization code from client_id
-        const encoder = new TextEncoder();
-        const data = encoder.encode(clientId + ':auth_code');
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const authCode = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+        const authCode = (await hashToHex(clientId + ':auth_code')).slice(0, 32);
 
         // Redirect back to client with authorization code
         // Handle complex redirect URIs by manually appending the code parameter
@@ -106,12 +104,7 @@ export default {
           });
         }
 
-        // Generate deterministic access token from client_id
-        const encoder = new TextEncoder();
-        const data = encoder.encode(clientId + ':access_token');
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const accessToken = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        const accessToken = await hashToHex(clientId + ':access_token');
 
         const tokenResponse = {
           access_token: accessToken,
