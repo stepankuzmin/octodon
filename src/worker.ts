@@ -9,12 +9,14 @@ interface PostsData {
   statuses: Status[];
 }
 
-async function hashToHex(input: string): Promise<string> {
-  const data = new TextEncoder().encode(input);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  const bytes = Array.from(new Uint8Array(hash));
-  return bytes.map(b => b.toString(16).padStart(2, '0')).join('');
-}
+/**
+ * OAUTH PHILOSOPHY FOR SINGLE-USER INSTANCE
+ *
+ * These endpoints exist ONLY for Mastodon client compatibility.
+ * We return static credentials and NEVER validate tokens.
+ * All requests are implicitly "authenticated" as the owner.
+ * This is intentional - single-user instance, no real auth needed.
+ */
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -35,98 +37,49 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    // Handle OPTIONS for CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // Route: POST /api/v1/apps (OAuth app registration for clients)
-    // Returns mock credentials - no storage needed for read-only API
+    // OAuth: App registration (static response, never validated)
     if (request.method === 'POST' && url.pathname === '/api/v1/apps') {
-      try {
-        const body = await request.json() as any;
-        const clientName = body.client_name || 'Unknown App';
-
-        const hash = await hashToHex(clientName);
-        const clientId = hash.slice(0, 32);
-        const clientSecret = hash.slice(32, 64);
-
-        const app = {
-          id: clientId.slice(0, 16),
-          name: clientName,
-          website: body.website || null,
-          redirect_uri: body.redirect_uris || 'urn:ietf:wg:oauth:2.0:oob',
-          client_id: clientId,
-          client_secret: clientSecret,
-          vapid_key: '',
-        };
-
-        return new Response(JSON.stringify(app), { headers: CORS_HEADERS });
-      } catch (error) {
-        return new Response(JSON.stringify({ error: 'Invalid request' }), {
-          status: 400,
-          headers: CORS_HEADERS,
-        });
-      }
+      const body = await request.json() as any;
+      return new Response(JSON.stringify({
+        id: '1',
+        name: body.client_name || 'App',
+        website: body.website || null,
+        redirect_uri: body.redirect_uris || 'urn:ietf:wg:oauth:2.0:oob',
+        client_id: 'octodon_client',
+        client_secret: 'octodon_secret',
+        vapid_key: '',
+      }), { headers: CORS_HEADERS });
     }
 
-    // Route: GET /oauth/authorize (OAuth authorization endpoint)
-    // Auto-approve and redirect back with authorization code
+    // OAuth: Authorization (auto-approve with static code)
     if (request.method === 'GET' && url.pathname === '/oauth/authorize') {
-      const clientId = url.searchParams.get('client_id');
       const redirectUri = url.searchParams.get('redirect_uri');
-      const responseType = url.searchParams.get('response_type');
+      if (!redirectUri) return new Response('Bad Request', { status: 400 });
 
-      if (!clientId || !redirectUri || responseType !== 'code') {
-        return new Response('Invalid OAuth request', { status: 400 });
-      }
-
-      try {
-        const authCode = (await hashToHex(clientId + ':auth_code')).slice(0, 32);
-
-        // Redirect back to client with authorization code
-        // Handle complex redirect URIs by manually appending the code parameter
-        const separator = redirectUri.includes('?') ? '&' : '?';
-        const redirectUrlWithCode = `${redirectUri}${separator}code=${authCode}`;
-
-        return Response.redirect(redirectUrlWithCode, 302);
-      } catch (error) {
-        return new Response('Failed to process OAuth request', { status: 500 });
-      }
+      const separator = redirectUri.includes('?') ? '&' : '?';
+      return Response.redirect(`${redirectUri}${separator}code=octodon_code`, 302);
     }
 
-    // Route: POST /oauth/token (OAuth token exchange endpoint)
-    // Exchange authorization code for access token
+    // OAuth: Token exchange (static token, never validated)
     if (request.method === 'POST' && url.pathname === '/oauth/token') {
-      try {
-        const body = await request.json() as any;
-        const grantType = body.grant_type;
-        const code = body.code;
-        const clientId = body.client_id;
-
-        if (grantType !== 'authorization_code' || !code || !clientId) {
-          return new Response(JSON.stringify({ error: 'invalid_request' }), {
-            status: 400,
-            headers: CORS_HEADERS,
-          });
-        }
-
-        const accessToken = await hashToHex(clientId + ':access_token');
-
-        const tokenResponse = {
-          access_token: accessToken,
-          token_type: 'Bearer',
-          scope: 'read write follow push',
-          created_at: Math.floor(Date.now() / 1000),
-        };
-
-        return new Response(JSON.stringify(tokenResponse), { headers: CORS_HEADERS });
-      } catch (error) {
+      const body = await request.json() as any;
+      if (body.grant_type !== 'authorization_code') {
         return new Response(JSON.stringify({ error: 'invalid_request' }), {
           status: 400,
           headers: CORS_HEADERS,
         });
       }
+
+      return new Response(JSON.stringify({
+        access_token: 'octodon_static_token_never_validated',
+        token_type: 'Bearer',
+        scope: 'read write follow push',
+        created_at: Math.floor(Date.now() / 1000),
+      }), { headers: CORS_HEADERS });
     }
 
     // Fetch data from R2
