@@ -94,12 +94,41 @@ npm run dev
 
 Note: Local dev mode won't have access to R2. You'll need to mock the data or test after deploying.
 
-## API Endpoints
+## API Access
 
-- `GET /api/v1/timelines/public` - Public timeline
-- `GET /api/v1/statuses/:id` - Individual status
-- `GET /api/v1/instance` - Instance information
-- `GET /api/v1/accounts/:id` - Account information
+### Unauthenticated Access (Simplest)
+
+All public endpoints work without authentication:
+
+```bash
+# Get public timeline
+curl https://octodon.stepan-kuzmin.workers.dev/api/v1/timelines/public
+
+# Get instance info
+curl https://octodon.stepan-kuzmin.workers.dev/api/v1/instance
+
+# Get specific post
+curl https://octodon.stepan-kuzmin.workers.dev/api/v1/statuses/1737796500000
+```
+
+### OAuth Access (For Mastodon Clients)
+
+This instance provides **public OAuth credentials** that anyone can use:
+
+- **client_id**: `octodon_public_readonly`
+- **client_secret**: `octodon_public_readonly`
+- **access_token**: `octodon_public_readonly_token`
+
+These credentials are:
+- ✅ Intentionally public and documented
+- ✅ The same for everyone (no user authentication)
+- ✅ Provide read-only access to public data
+- ✅ Never validated (all requests treated equally)
+
+Mastodon clients like Elk, Ivory, and Phanpy will request these credentials automatically through the OAuth flow.
+
+**Why OAuth if it's public?**
+Mastodon clients expect an OAuth flow even for public data. We provide it for compatibility, but it's not securing anything - this is a single-user, read-only instance.
 
 ## Post Frontmatter Options
 

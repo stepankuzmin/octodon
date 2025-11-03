@@ -10,12 +10,21 @@ interface PostsData {
 }
 
 /**
- * OAUTH PHILOSOPHY FOR SINGLE-USER INSTANCE
+ * PUBLIC READ-ONLY OAUTH MODEL
  *
- * These endpoints exist ONLY for Mastodon client compatibility.
- * We return static credentials and NEVER validate tokens.
- * All requests are implicitly "authenticated" as the owner.
- * This is intentional - single-user instance, no real auth needed.
+ * This instance uses PUBLIC OAuth credentials for API compatibility.
+ * Everyone uses the same credentials - no user authentication exists.
+ *
+ * Public credentials (documented and intentionally public):
+ *   client_id: octodon_public_readonly
+ *   client_secret: octodon_public_readonly
+ *   access_token: octodon_public_readonly_token
+ *
+ * These credentials provide read-only access to public data.
+ * Tokens are never validated - all requests treated equally.
+ *
+ * Unauthenticated access also works for public endpoints.
+ * OAuth exists only because Mastodon clients require the flow.
  */
 
 const CORS_HEADERS = {
@@ -41,7 +50,7 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // OAuth: App registration (static response, never validated)
+    // OAuth: App registration (public credentials, same for everyone)
     if (request.method === 'POST' && url.pathname === '/api/v1/apps') {
       const body = await request.json() as any;
       return new Response(JSON.stringify({
@@ -49,22 +58,22 @@ export default {
         name: body.client_name || 'App',
         website: body.website || null,
         redirect_uri: body.redirect_uris || 'urn:ietf:wg:oauth:2.0:oob',
-        client_id: 'octodon_client',
-        client_secret: 'octodon_secret',
+        client_id: 'octodon_public_readonly',
+        client_secret: 'octodon_public_readonly',
         vapid_key: '',
       }), { headers: CORS_HEADERS });
     }
 
-    // OAuth: Authorization (auto-approve with static code)
+    // OAuth: Authorization (auto-approve, everyone gets same code)
     if (request.method === 'GET' && url.pathname === '/oauth/authorize') {
       const redirectUri = url.searchParams.get('redirect_uri');
       if (!redirectUri) return new Response('Bad Request', { status: 400 });
 
       const separator = redirectUri.includes('?') ? '&' : '?';
-      return Response.redirect(`${redirectUri}${separator}code=octodon_code`, 302);
+      return Response.redirect(`${redirectUri}${separator}code=octodon_public_readonly_code`, 302);
     }
 
-    // OAuth: Token exchange (static token, never validated)
+    // OAuth: Token exchange (public token, same for everyone, never validated)
     if (request.method === 'POST' && url.pathname === '/oauth/token') {
       const body = await request.json() as any;
       if (body.grant_type !== 'authorization_code') {
@@ -75,7 +84,7 @@ export default {
       }
 
       return new Response(JSON.stringify({
-        access_token: 'octodon_static_token_never_validated',
+        access_token: 'octodon_public_readonly_token',
         token_type: 'Bearer',
         scope: 'read write follow push',
         created_at: Math.floor(Date.now() / 1000),
@@ -129,8 +138,8 @@ export default {
       const instance = {
         uri: url.hostname,
         title: 'Octodon',
-        short_description: 'A static Mastodon instance powered by markdown',
-        description: 'A static Mastodon instance powered by markdown files and Cloudflare Workers',
+        short_description: 'Public read-only Mastodon instance',
+        description: 'Single-user static Mastodon instance powered by markdown files and Cloudflare Workers. All data is public and read-only. OAuth credentials are public and documented for API compatibility.',
         email: '',
         version: '4.2.0 (compatible)',
         languages: ['en'],
