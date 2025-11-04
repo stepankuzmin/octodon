@@ -1,5 +1,4 @@
 import type { Account, Status } from './types';
-import { encrypt, decrypt, signState, verifyState } from './crypto';
 import { Octokit } from 'octokit';
 
 interface Env {
@@ -7,8 +6,6 @@ interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   GITHUB_REPO: string;
-  ENCRYPTION_KEY: string;
-  HMAC_SECRET: string;
   OWNER_GITHUB_USERNAME: string;
 }
 
@@ -20,18 +17,17 @@ interface PostsData {
 /**
  * GITHUB OAUTH BRIDGE FOR AUTHENTICATED POSTING
  *
- * This instance bridges Mastodon OAuth to GitHub OAuth for real authentication.
+ * Bridges Mastodon OAuth to GitHub OAuth for real authentication.
  *
  * Flow:
- * 1. Elk initiates OAuth → We redirect to GitHub
- * 2. User authorizes GitHub → We validate they're the owner
- * 3. We encrypt GitHub token and return to Elk
- * 4. Elk uses token to post → We decrypt and commit to GitHub
+ * 1. Client initiates OAuth → Redirect to GitHub
+ * 2. User authorizes GitHub → Validate owner
+ * 3. Return GitHub token to client
+ * 4. Client posts → Commit to GitHub as markdown
  *
  * Read access: Public, no auth needed
- * Write access: Requires GitHub OAuth (owner only)
- *
- * Stateless: No KV storage, tokens encrypted in OAuth codes
+ * Write access: GitHub OAuth, owner only
+ * Stateless: No database or KV storage
  */
 
 const CORS_HEADERS = {
@@ -76,10 +72,10 @@ export default {
       const redirectUri = url.searchParams.get('redirect_uri');
       if (!redirectUri) return new Response('Bad Request', { status: 400 });
 
-      const state = await signState(
-        { elkRedirect: redirectUri, ts: Date.now() },
-        env.HMAC_SECRET
-      );
+      const state = btoa(JSON.stringify({
+        clientRedirect: redirectUri,
+        ts: Date.now()
+      }));
 
       const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
         `${url.origin}/oauth/github/callback`
@@ -95,7 +91,10 @@ export default {
         const encodedState = url.searchParams.get('state');
         if (!code || !encodedState) return new Response('Bad Request', { status: 400 });
 
-        const state = await verifyState(encodedState, env.HMAC_SECRET);
+        const state = JSON.parse(atob(encodedState));
+        if (Date.now() - state.ts > 600000) {
+          return new Response('State expired', { status: 400 });
+        }
 
         const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
           method: 'POST',
@@ -120,40 +119,30 @@ export default {
           return new Response('Unauthorized: Not the instance owner', { status: 403 });
         }
 
-        const encryptedToken = await encrypt(githubToken, env.ENCRYPTION_KEY);
-        const separator = state.elkRedirect.includes('?') ? '&' : '?';
-        return Response.redirect(`${state.elkRedirect}${separator}code=${encodeURIComponent(encryptedToken)}`, 302);
+        const separator = state.clientRedirect.includes('?') ? '&' : '?';
+        return Response.redirect(`${state.clientRedirect}${separator}code=${encodeURIComponent(githubToken)}`, 302);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return new Response(`OAuth error: ${message}`, { status: 500 });
       }
     }
 
-    // OAuth: Token exchange (decrypt GitHub token)
+    // OAuth: Token exchange (return GitHub token as-is)
     if (request.method === 'POST' && url.pathname === '/oauth/token') {
-      try {
-        const body = await request.json() as any;
-        if (body.grant_type !== 'authorization_code' || !body.code) {
-          return new Response(JSON.stringify({ error: 'invalid_request' }), {
-            status: 400,
-            headers: CORS_HEADERS,
-          });
-        }
-
-        const githubToken = await decrypt(body.code, env.ENCRYPTION_KEY);
-
-        return new Response(JSON.stringify({
-          access_token: githubToken,
-          token_type: 'Bearer',
-          scope: 'read write follow push',
-          created_at: Math.floor(Date.now() / 1000),
-        }), { headers: CORS_HEADERS });
-      } catch (error) {
+      const body = await request.json() as any;
+      if (body.grant_type !== 'authorization_code' || !body.code) {
         return new Response(JSON.stringify({ error: 'invalid_request' }), {
           status: 400,
           headers: CORS_HEADERS,
         });
       }
+
+      return new Response(JSON.stringify({
+        access_token: body.code,
+        token_type: 'Bearer',
+        scope: 'read write follow push',
+        created_at: Math.floor(Date.now() / 1000),
+      }), { headers: CORS_HEADERS });
     }
 
     // POST: Create status (requires GitHub OAuth)

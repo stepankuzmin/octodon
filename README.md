@@ -89,20 +89,8 @@ To enable posting from Mastodon clients like Elk:
 
 **b) Set Worker Secrets:**
 ```bash
-# GitHub OAuth credentials
 wrangler secret put GITHUB_CLIENT_ID
 wrangler secret put GITHUB_CLIENT_SECRET
-
-# Encryption keys (generate random 32-char strings)
-wrangler secret put ENCRYPTION_KEY
-wrangler secret put HMAC_SECRET
-```
-
-**c) Generate Encryption Keys:**
-```bash
-# On macOS/Linux:
-openssl rand -base64 32  # Use for ENCRYPTION_KEY
-openssl rand -base64 32  # Use for HMAC_SECRET
 ```
 
 ### 9. Test
@@ -146,25 +134,24 @@ curl https://octodon.stepan-kuzmin.workers.dev/api/v1/statuses/1737796500000
 
 When you configure GitHub OAuth (step 8), this instance bridges Mastodon OAuth to GitHub OAuth:
 
-**What happens when you sign in via Elk:**
-1. You click "Sign in" in Elk
-2. Octodon redirects you to GitHub
-3. You authorize via GitHub (real authentication!)
-4. Octodon validates you're the instance owner
-5. Returns encrypted GitHub token to Elk
-6. You can now post from Elk → commits to GitHub → CI rebuilds
+**Sign-in flow:**
+1. Client initiates OAuth
+2. Redirected to GitHub for authentication
+3. Authorize via GitHub (real authentication!)
+4. Validated as instance owner
+5. GitHub token returned to client
+6. Posts commit to GitHub as markdown → CI rebuilds
 
 **Authentication model:**
 - ✅ **Read access**: Public, no auth needed
-- ✅ **Write access**: Requires GitHub OAuth (owner only)
-- ✅ Real GitHub authentication validates identity
-- ✅ Posts commit to Git (maintains version control)
-- ✅ Stateless (no database, tokens encrypted in OAuth codes)
+- ✅ **Write access**: GitHub OAuth, owner only
+- ✅ Real authentication via GitHub
+- ✅ Posts as markdown (version control maintained)
+- ✅ Stateless (no database or KV storage)
 
 **Without GitHub OAuth configured:**
-- Public read-only access still works
-- Clients can browse timeline without authentication
-- Posting disabled (returns 401)
+- Public read-only access works
+- Posting returns 401 Unauthorized
 
 ## Post Frontmatter Options
 
