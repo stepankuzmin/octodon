@@ -45,6 +45,10 @@ const createMockEnv = () => ({
       json: async () => mockPostsData,
     }),
   },
+  GITHUB_CLIENT_ID: 'test_client_id',
+  GITHUB_CLIENT_SECRET: 'test_client_secret',
+  GITHUB_REPO: 'octodon',
+  OWNER_GITHUB_USERNAME: 'testuser',
 });
 
 const createRequest = (url: string, options?: RequestInit) => {
@@ -115,7 +119,7 @@ describe('OAuth Endpoints', () => {
     assert.strictEqual(data1.client_secret, data2.client_secret);
   });
 
-  it('GET /oauth/authorize redirects with code', async () => {
+  it('GET /oauth/authorize redirects to GitHub', async () => {
     const worker = await importWorker();
     const request = createRequest(
       '/oauth/authorize?client_id=test123&redirect_uri=https://example.com/callback&response_type=code'
@@ -125,12 +129,13 @@ describe('OAuth Endpoints', () => {
     assert.strictEqual(response.status, 302);
     const location = response.headers.get('Location');
     assert.ok(location);
-    assert.ok(location.startsWith('https://example.com/callback?code='));
+    assert.ok(location.startsWith('https://github.com/login/oauth/authorize'));
+    assert.ok(location.includes('client_id=test_client_id'));
   });
 
-  it('GET /oauth/authorize handles complex redirect URIs', async () => {
+  it('GET /oauth/authorize includes state parameter', async () => {
     const worker = await importWorker();
-    const redirectUri = 'https://elk.zone/api/server.com/oauth/https://elk.zone';
+    const redirectUri = 'https://example.com/callback';
     const request = createRequest(
       `/oauth/authorize?client_id=test&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`
     );
@@ -138,7 +143,7 @@ describe('OAuth Endpoints', () => {
 
     assert.strictEqual(response.status, 302);
     const location = response.headers.get('Location');
-    assert.ok(location?.startsWith(redirectUri));
+    assert.ok(location?.includes('state='));
   });
 
   it('GET /oauth/authorize returns 400 for invalid requests', async () => {
@@ -149,14 +154,14 @@ describe('OAuth Endpoints', () => {
     assert.strictEqual(response.status, 400);
   });
 
-  it('POST /oauth/token exchanges code for token', async () => {
+  it('POST /oauth/token returns code as access token', async () => {
     const worker = await importWorker();
     const request = createRequest('/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         grant_type: 'authorization_code',
-        code: 'test_code',
+        code: 'github_token_abc123',
         client_id: 'test_client',
         redirect_uri: 'https://example.com',
       }),
@@ -165,7 +170,7 @@ describe('OAuth Endpoints', () => {
     const data = await response.json();
 
     assert.strictEqual(response.status, 200);
-    assert.ok(data.access_token);
+    assert.strictEqual(data.access_token, 'github_token_abc123');
     assert.strictEqual(data.token_type, 'Bearer');
     assert.strictEqual(data.scope, 'read write follow push');
   });
