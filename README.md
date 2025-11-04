@@ -74,10 +74,41 @@ npx wrangler r2 object put octodon-data/posts.json --file=dist/posts.json
 npm run deploy
 ```
 
-### 8. Test
+### 8. Configure GitHub OAuth (Optional - for posting via Elk)
+
+To enable posting from Mastodon clients like Elk:
+
+**a) Create GitHub OAuth App:**
+1. Go to https://github.com/settings/developers
+2. Click "New OAuth App"
+3. Configure:
+   - Application name: `Octodon`
+   - Homepage URL: `https://octodon.YOUR_USERNAME.workers.dev`
+   - Callback URL: `https://octodon.YOUR_USERNAME.workers.dev/oauth/github/callback`
+4. Save the Client ID and Client Secret
+
+**b) Set Worker Secrets:**
+```bash
+# GitHub OAuth credentials
+wrangler secret put GITHUB_CLIENT_ID
+wrangler secret put GITHUB_CLIENT_SECRET
+
+# Encryption keys (generate random 32-char strings)
+wrangler secret put ENCRYPTION_KEY
+wrangler secret put HMAC_SECRET
+```
+
+**c) Generate Encryption Keys:**
+```bash
+# On macOS/Linux:
+openssl rand -base64 32  # Use for ENCRYPTION_KEY
+openssl rand -base64 32  # Use for HMAC_SECRET
+```
+
+### 9. Test
 
 ```bash
-# Get public timeline
+# Get public timeline (no auth needed)
 curl https://octodon.YOUR_USERNAME.workers.dev/api/v1/timelines/public
 
 # Get instance info
@@ -111,24 +142,29 @@ curl https://octodon.stepan-kuzmin.workers.dev/api/v1/instance
 curl https://octodon.stepan-kuzmin.workers.dev/api/v1/statuses/1737796500000
 ```
 
-### OAuth Access (For Mastodon Clients)
+### OAuth Access (For Mastodon Clients - Posting Enabled)
 
-This instance provides **public OAuth credentials** that anyone can use:
+When you configure GitHub OAuth (step 8), this instance bridges Mastodon OAuth to GitHub OAuth:
 
-- **client_id**: `octodon_public_readonly`
-- **client_secret**: `octodon_public_readonly`
-- **access_token**: `octodon_public_readonly_token`
+**What happens when you sign in via Elk:**
+1. You click "Sign in" in Elk
+2. Octodon redirects you to GitHub
+3. You authorize via GitHub (real authentication!)
+4. Octodon validates you're the instance owner
+5. Returns encrypted GitHub token to Elk
+6. You can now post from Elk → commits to GitHub → CI rebuilds
 
-These credentials are:
-- ✅ Intentionally public and documented
-- ✅ The same for everyone (no user authentication)
-- ✅ Provide read-only access to public data
-- ✅ Never validated (all requests treated equally)
+**Authentication model:**
+- ✅ **Read access**: Public, no auth needed
+- ✅ **Write access**: Requires GitHub OAuth (owner only)
+- ✅ Real GitHub authentication validates identity
+- ✅ Posts commit to Git (maintains version control)
+- ✅ Stateless (no database, tokens encrypted in OAuth codes)
 
-Mastodon clients like Elk, Ivory, and Phanpy will request these credentials automatically through the OAuth flow.
-
-**Why OAuth if it's public?**
-Mastodon clients expect an OAuth flow even for public data. We provide it for compatibility, but it's not securing anything - this is a single-user, read-only instance.
+**Without GitHub OAuth configured:**
+- Public read-only access still works
+- Clients can browse timeline without authentication
+- Posting disabled (returns 401)
 
 ## Post Frontmatter Options
 

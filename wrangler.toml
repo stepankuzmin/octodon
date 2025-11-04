@@ -2,6 +2,10 @@ name = "octodon"
 main = "src/worker.ts"
 compatibility_date = "2025-01-28"
 
+[vars]
+OWNER_GITHUB_USERNAME = "stepankuzmin"
+GITHUB_REPO = "octodon"
+
 [[r2_buckets]]
 binding = "DATA"
 bucket_name = "octodon-data"

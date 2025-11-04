@@ -1,7 +1,15 @@
 import type { Account, Status } from './types';
+import { encrypt, decrypt, signState, verifyState } from './crypto';
+import { Octokit } from 'octokit';
 
 interface Env {
   DATA: R2Bucket;
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  GITHUB_REPO: string;
+  ENCRYPTION_KEY: string;
+  HMAC_SECRET: string;
+  OWNER_GITHUB_USERNAME: string;
 }
 
 interface PostsData {
@@ -10,21 +18,20 @@ interface PostsData {
 }
 
 /**
- * PUBLIC READ-ONLY OAUTH MODEL
+ * GITHUB OAUTH BRIDGE FOR AUTHENTICATED POSTING
  *
- * This instance uses PUBLIC OAuth credentials for API compatibility.
- * Everyone uses the same credentials - no user authentication exists.
+ * This instance bridges Mastodon OAuth to GitHub OAuth for real authentication.
  *
- * Public credentials (documented and intentionally public):
- *   client_id: octodon_public_readonly
- *   client_secret: octodon_public_readonly
- *   access_token: octodon_public_readonly_token
+ * Flow:
+ * 1. Elk initiates OAuth → We redirect to GitHub
+ * 2. User authorizes GitHub → We validate they're the owner
+ * 3. We encrypt GitHub token and return to Elk
+ * 4. Elk uses token to post → We decrypt and commit to GitHub
  *
- * These credentials provide read-only access to public data.
- * Tokens are never validated - all requests treated equally.
+ * Read access: Public, no auth needed
+ * Write access: Requires GitHub OAuth (owner only)
  *
- * Unauthenticated access also works for public endpoints.
- * OAuth exists only because Mastodon clients require the flow.
+ * Stateless: No KV storage, tokens encrypted in OAuth codes
  */
 
 const CORS_HEADERS = {
@@ -50,7 +57,7 @@ export default {
       return new Response(null, { headers: CORS_HEADERS });
     }
 
-    // OAuth: App registration (public credentials, same for everyone)
+    // OAuth: App registration (returns public credentials for compatibility)
     if (request.method === 'POST' && url.pathname === '/api/v1/apps') {
       const body = await request.json() as any;
       return new Response(JSON.stringify({
@@ -64,31 +71,156 @@ export default {
       }), { headers: CORS_HEADERS });
     }
 
-    // OAuth: Authorization (auto-approve, everyone gets same code)
+    // OAuth: Redirect to GitHub for authentication
     if (request.method === 'GET' && url.pathname === '/oauth/authorize') {
       const redirectUri = url.searchParams.get('redirect_uri');
       if (!redirectUri) return new Response('Bad Request', { status: 400 });
 
-      const separator = redirectUri.includes('?') ? '&' : '?';
-      return Response.redirect(`${redirectUri}${separator}code=octodon_public_readonly_code`, 302);
+      const state = await signState(
+        { elkRedirect: redirectUri, ts: Date.now() },
+        env.HMAC_SECRET
+      );
+
+      const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${env.GITHUB_CLIENT_ID}&redirect_uri=${encodeURIComponent(
+        `${url.origin}/oauth/github/callback`
+      )}&state=${encodeURIComponent(state)}&scope=repo`;
+
+      return Response.redirect(githubAuthUrl, 302);
     }
 
-    // OAuth: Token exchange (public token, same for everyone, never validated)
+    // OAuth: GitHub callback handler
+    if (request.method === 'GET' && url.pathname === '/oauth/github/callback') {
+      try {
+        const code = url.searchParams.get('code');
+        const encodedState = url.searchParams.get('state');
+        if (!code || !encodedState) return new Response('Bad Request', { status: 400 });
+
+        const state = await verifyState(encodedState, env.HMAC_SECRET);
+
+        const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            client_id: env.GITHUB_CLIENT_ID,
+            client_secret: env.GITHUB_CLIENT_SECRET,
+            code,
+          }),
+        });
+
+        const { access_token: githubToken } = await tokenResponse.json() as any;
+        if (!githubToken) return new Response('GitHub auth failed', { status: 500 });
+
+        const octokit = new Octokit({ auth: githubToken });
+        const { data: user } = await octokit.rest.users.getAuthenticated();
+
+        if (user.login !== env.OWNER_GITHUB_USERNAME) {
+          return new Response('Unauthorized: Not the instance owner', { status: 403 });
+        }
+
+        const encryptedToken = await encrypt(githubToken, env.ENCRYPTION_KEY);
+        const separator = state.elkRedirect.includes('?') ? '&' : '?';
+        return Response.redirect(`${state.elkRedirect}${separator}code=${encodeURIComponent(encryptedToken)}`, 302);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return new Response(`OAuth error: ${message}`, { status: 500 });
+      }
+    }
+
+    // OAuth: Token exchange (decrypt GitHub token)
     if (request.method === 'POST' && url.pathname === '/oauth/token') {
-      const body = await request.json() as any;
-      if (body.grant_type !== 'authorization_code') {
+      try {
+        const body = await request.json() as any;
+        if (body.grant_type !== 'authorization_code' || !body.code) {
+          return new Response(JSON.stringify({ error: 'invalid_request' }), {
+            status: 400,
+            headers: CORS_HEADERS,
+          });
+        }
+
+        const githubToken = await decrypt(body.code, env.ENCRYPTION_KEY);
+
+        return new Response(JSON.stringify({
+          access_token: githubToken,
+          token_type: 'Bearer',
+          scope: 'read write follow push',
+          created_at: Math.floor(Date.now() / 1000),
+        }), { headers: CORS_HEADERS });
+      } catch (error) {
         return new Response(JSON.stringify({ error: 'invalid_request' }), {
           status: 400,
           headers: CORS_HEADERS,
         });
       }
+    }
 
-      return new Response(JSON.stringify({
-        access_token: 'octodon_public_readonly_token',
-        token_type: 'Bearer',
-        scope: 'read write follow push',
-        created_at: Math.floor(Date.now() / 1000),
-      }), { headers: CORS_HEADERS });
+    // POST: Create status (requires GitHub OAuth)
+    if (request.method === 'POST' && url.pathname === '/api/v1/statuses') {
+      try {
+        const authHeader = request.headers.get('Authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+          return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+            status: 401,
+            headers: CORS_HEADERS,
+          });
+        }
+
+        const githubToken = authHeader.slice(7);
+        const octokit = new Octokit({ auth: githubToken });
+
+        const { data: user } = await octokit.rest.users.getAuthenticated();
+        if (user.login !== env.OWNER_GITHUB_USERNAME) {
+          return new Response(JSON.stringify({ error: 'Forbidden: Not the instance owner' }), {
+            status: 403,
+            headers: CORS_HEADERS,
+          });
+        }
+
+        const body = await request.json() as any;
+        const content = body.status || '';
+        const visibility = body.visibility || 'public';
+        const sensitive = body.sensitive || false;
+
+        const now = new Date();
+        const filename = `${now.toISOString().split('T')[0]}-${Date.now()}.md`;
+        const frontmatter = `---
+date: ${now.toISOString()}
+visibility: ${visibility}
+sensitive: ${sensitive}
+---
+
+${content}`;
+
+        const repo = env.GITHUB_REPO || 'octodon';
+        await octokit.rest.repos.createOrUpdateFileContents({
+          owner: env.OWNER_GITHUB_USERNAME,
+          repo,
+          path: `posts/${filename}`,
+          message: `Add post via Elk`,
+          content: btoa(frontmatter),
+        });
+
+        const status = {
+          id: Date.now().toString(),
+          created_at: now.toISOString(),
+          content,
+          visibility,
+          sensitive,
+        };
+
+        return new Response(JSON.stringify(status), {
+          status: 201,
+          headers: CORS_HEADERS,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create status';
+        return new Response(JSON.stringify({ error: message }), {
+          status: 500,
+          headers: CORS_HEADERS,
+        });
+      }
     }
 
     // Fetch data from R2

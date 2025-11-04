@@ -18,7 +18,9 @@
     "wrangler": "^4.45.3"
   },
   "dependencies": {
+    "@octokit/oauth-app": "^8.0.3",
     "gray-matter": "^4.0.3",
-    "marked": "^16.4.1"
+    "marked": "^16.4.1",
+    "octokit": "^5.0.5"
   }
 }
