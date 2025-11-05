@@ -277,15 +277,34 @@ ${content}`;
         },
         thumbnail: '',
         contact_account: data.account,
+        configuration: {
+          statuses: {
+            max_characters: 500,
+            max_media_attachments: 0,
+            characters_reserved_per_url: 23,
+          },
+        },
       };
       return new Response(JSON.stringify(instance), { headers: CORS_HEADERS });
     }
 
     // Route: GET /api/v1/accounts/verify_credentials
-    // Returns the authenticated user's account (always returns the single account)
-    // MUST come before /api/v1/accounts/:id to avoid matching "verify_credentials" as an ID
+    // MUST come before /api/v1/accounts/:id to avoid matching as an ID
     if (url.pathname === '/api/v1/accounts/verify_credentials') {
       return new Response(JSON.stringify(data.account), { headers: CORS_HEADERS });
+    }
+
+    // Route: GET /api/v1/accounts/lookup
+    // MUST come before /api/v1/accounts/:id to avoid matching "lookup" as an ID
+    if (url.pathname === '/api/v1/accounts/lookup') {
+      const acct = url.searchParams.get('acct');
+      if (acct === data.account.username || acct === data.account.acct) {
+        return new Response(JSON.stringify(data.account), { headers: CORS_HEADERS });
+      }
+      return new Response(JSON.stringify({ error: 'Record not found' }), {
+        status: 404,
+        headers: CORS_HEADERS,
+      });
     }
 
     // Route: GET /api/v1/accounts/:id
