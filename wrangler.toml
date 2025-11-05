@@ -3,8 +3,8 @@ main = "src/worker.ts"
 compatibility_date = "2025-01-28"
 
 [vars]
-OWNER_GITHUB_USERNAME = "stepankuzmin"
 GITHUB_REPO = "octodon"
+OWNER_GITHUB_USERNAME = "stepankuzmin"
 
 [[r2_buckets]]
 binding = "DATA"

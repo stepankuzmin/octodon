@@ -307,6 +307,32 @@ ${content}`;
       });
     }
 
+    // Route: GET /api/v1/accounts/:id/statuses
+    if (url.pathname.match(/^\/api\/v1\/accounts\/[^/]+\/statuses$/)) {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 40);
+      const pinned = url.searchParams.get('pinned') === 'true';
+
+      if (pinned) {
+        return new Response(JSON.stringify([]), { headers: CORS_HEADERS });
+      }
+
+      const statuses = data.statuses.slice(0, limit);
+      return new Response(JSON.stringify(statuses), { headers: CORS_HEADERS });
+    }
+
+    // Route: GET /api/v1/accounts/:id/relationships
+    if (url.pathname.match(/^\/api\/v1\/accounts\/[^/]+\/relationships$/)) {
+      return new Response(JSON.stringify([{
+        id: data.account.id,
+        following: false,
+        followed_by: false,
+        blocking: false,
+        muting: false,
+        requested: false,
+        domain_blocking: false,
+      }]), { headers: CORS_HEADERS });
+    }
+
     // Route: GET /api/v1/accounts/:id
     if (url.pathname.startsWith('/api/v1/accounts/')) {
       const id = url.pathname.split('/').pop();

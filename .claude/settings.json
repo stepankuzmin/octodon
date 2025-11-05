@@ -6,13 +6,15 @@
       "Bash(git push:*)",
       "Bash(npm install)",
       "Bash(npx wrangler:*)",
+      "Bash(npm install:*)",
+      "Bash(gh run list:*)",
+      "Bash(curl:*)",
+      "Skill(bd-issue-tracking)",
       "WebFetch(domain:docs.joinmastodon.org)",
       "WebFetch(domain:developers.cloudflare.com)"
     ],
     "deny": [],
     "ask": [
-      "Bash(curl:*)",
-      "Bash(bd close:*)"
     ]
   }
 }
